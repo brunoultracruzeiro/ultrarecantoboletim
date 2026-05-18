@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Ultra Cruzeiro — Boletins</title>
+<title>Ultra Recanto — Boletins</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css"/>
 <style>
@@ -72,7 +72,7 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;cursor:pointer}
       <div style="width:56px;height:56px;border-radius:50%;background:var(--bgi);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem">
         <i class="ti ti-barbell" style="font-size:28px;color:var(--ti)"></i>
       </div>
-      <h1 style="font-size:22px;font-weight:500">Ultra Cruzeiro</h1>
+      <h1 style="font-size:22px;font-weight:500">Ultra Recanto</h1>
       <p style="font-size:13px;color:var(--t2);margin-top:4px">Selecione seu nome para preencher o boletim</p>
     </div>
     <div id="staff-list">
@@ -181,7 +181,6 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;cursor:pointer}
     </div>
   </header>
   <div class="wrap" style="max-width:960px">
-    <!-- Filtro de unidade (só admin vê) -->
     <div id="unit-filter-bar" class="hidden" style="background:var(--bg);border:0.5px solid rgba(28,28,26,0.15);border-radius:var(--br);padding:.75rem 1rem;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
       <i class="ti ti-building" style="color:var(--t2);font-size:16px"></i>
       <span style="font-size:13px;color:var(--t2)">Unidade:</span>
@@ -227,10 +226,10 @@ input[type=checkbox],input[type=radio]{width:16px;height:16px;cursor:pointer}
 
 <script>
 // ── CONFIGURAÇÃO DA UNIDADE ───────────────────────────────────────────────
-const UNIDADE_ID   = 'recanto';      // cruzeiro | ceilandia | recanto
-const UNIDADE_NOME = 'Ultra Recanto';    // nome legível
-const ADMIN_PASS   = 'Madodo1*';     // senha do gestor geral (vê tudo)
-const LIDER_PASS   = 'Lider789*';  // senha do líder (vê só esta unidade)
+const UNIDADE_ID   = 'recanto';
+const UNIDADE_NOME = 'Ultra Recanto';
+const ADMIN_PASS   = 'Madodo1*';
+const LIDER_PASS   = 'Lider123*';
 
 const SUPABASE_URL = 'https://cpebkpckoqypdbqhicmw.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ssz6g9ZtGtPTLqk_WbMOGQ_TYipbztR';
@@ -238,6 +237,9 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser='', currentRole='', allData=[], allFeedbacks={}, allStaff=[];
 let currentFilter='today', currentGTab='dash', currentUnitFilter='all';
+
+// Mapa global para guardar dados de cada card por safeId — evita problemas com aspas em nomes
+const _aiDataMap = {};
 
 const todayStr=()=>new Date().toISOString().split('T')[0];
 const fmtDate=d=>{if(!d)return'';const[y,m,day]=d.split('-');return`${day}/${m}/${y}`;};
@@ -405,7 +407,6 @@ const UNIT_LABEL={'cruzeiro':'🏠 Cruzeiro','ceilandia':'🏙️ Ceilândia','r
 // ── DASH ──────────────────────────────────────────────────────────────────
 function renderDash(filtered,rData,mData){
   const rBy=byAuthor(rData), mBy=byAuthor(mData);
-  // se admin vendo tudo, mostrar por unidade
   const mostrarUnidade = currentRole==='admin' && currentUnitFilter==='all';
   let html=`<div class="stat-grid">
     <div class="stat"><div class="lbl"><i class="ti ti-file-text"></i> Boletins</div><div class="val">${filtered.length}</div></div>
@@ -436,7 +437,10 @@ function renderDash(filtered,rData,mData){
 
 function personCard(author,entries,type,unitLabel=''){
   const sc=scorecard(entries,type),badge=scoreBadge(sc),fb=allFeedbacks[author]||'';
-  const safeId=author.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+  // ── FIX: usar índice numérico no mapa em vez de interpolar o nome no onclick ──
+  const safeId = 'ai_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+  _aiDataMap[safeId] = { author, type, entries: JSON.parse(JSON.stringify(entries)) };
+
   const stats=type==='recepcao'
     ?`<div class="mini-grid"><div class="mini"><div class="lbl">Vendas</div><div class="val">${totalSales(entries)}</div></div><div class="mini"><div class="lbl">Visitas</div><div class="val">${totalVisits(entries)}</div></div><div class="mini"><div class="lbl">Contatos</div><div class="val">${totalContacts(entries)}</div></div><div class="mini"><div class="lbl">Conversão</div><div class="val">${convRate(entries)}%</div></div></div>`
     :`<div class="mini-grid"><div class="mini"><div class="lbl">Treinos</div><div class="val">${totalTrainings(entries)}</div></div><div class="mini"><div class="lbl">Engajamento</div><div class="val">+${totalEngagement(entries)}</div></div><div class="mini"><div class="lbl">Boletins</div><div class="val">${entries.length}</div></div></div>`;
@@ -451,6 +455,8 @@ function personCard(author,entries,type,unitLabel=''){
     </div>`;
   }).join('');
 
+  // ── FIX: botões usam data-attributes, não interpolação de string no onclick ──
+  const feedbackBtnLabel = fb ? 'Editar feedback' : 'Dar feedback';
   return`<div class="person">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.75rem;flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:center;gap:10px">
@@ -476,31 +482,68 @@ function personCard(author,entries,type,unitLabel=''){
     </details>
     ${fbHtml}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-      <button onclick="openFeedback('${author}')" style="font-size:13px;padding:5px 12px"><i class="ti ti-message-plus"></i> ${fb?'Editar feedback':'Dar feedback'}</button>
-      <button onclick="runAI('${safeId}','${author}','${type}')" style="font-size:13px;padding:5px 12px;background:linear-gradient(135deg,#ede9fe,#f0f4ff);color:#5b3fd4;border-color:#c7b8f5"><i class="ti ti-sparkles"></i> Análise</button>
+      <button class="btn-feedback" data-author="${author.replace(/"/g,'&quot;')}" style="font-size:13px;padding:5px 12px"><i class="ti ti-message-plus"></i> ${feedbackBtnLabel}</button>
+      <button class="btn-ai" data-safe-id="${safeId}" style="font-size:13px;padding:5px 12px;background:linear-gradient(135deg,#ede9fe,#f0f4ff);color:#5b3fd4;border-color:#c7b8f5"><i class="ti ti-sparkles"></i> Análise</button>
     </div>
     <div id="ai-${safeId}" class="hidden"></div>
   </div>`;
 }
 
-// ── ANÁLISE LOCAL ─────────────────────────────────────────────────────────
-function runAI(safeId,author,type){
-  const aiBox=el('ai-'+safeId);
+// ── EVENT DELEGATION para botões de análise e feedback ────────────────────
+document.addEventListener('click', function(e){
+  // Botão Análise
+  const aiBtn = e.target.closest('.btn-ai');
+  if(aiBtn){
+    const safeId = aiBtn.dataset.safeId;
+    if(safeId && _aiDataMap[safeId]){
+      const {author, type} = _aiDataMap[safeId];
+      runAI(safeId, author, type);
+    }
+    return;
+  }
+  // Botão Feedback
+  const fbBtn = e.target.closest('.btn-feedback');
+  if(fbBtn){
+    const author = fbBtn.dataset.author;
+    if(author) openFeedback(author);
+    return;
+  }
+  // Botão "Salvar como feedback" dentro da análise
+  const usarBtn = e.target.closest('.btn-usar-feedback');
+  if(usarBtn){
+    const author = usarBtn.dataset.author;
+    const txtId  = usarBtn.dataset.txtId;
+    if(author && txtId){
+      const txt = el(txtId)?.textContent || '';
+      if(txt){ saveFeedback(author, txt); usarBtn.innerHTML='<i class="ti ti-check"></i> Salvo!'; usarBtn.disabled=true; }
+    }
+    return;
+  }
+});
+
+// ── ANÁLISE ───────────────────────────────────────────────────────────────
+function runAI(safeId, author, type){
+  const aiBox = el('ai-'+safeId);
+  if(!aiBox) return;
   aiBox.classList.remove('hidden');
   aiBox.innerHTML=`<div class="ai-box"><div class="ai-header"><div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#7c5cbf,#4f8ef7);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-sparkles" style="font-size:14px;color:#fff"></i></div><span class="ai-title">Analisando ${author}...</span></div><div class="ai-typing"><span></span><span></span><span></span></div></div>`;
+
   setTimeout(()=>{
-    const filtered=getFiltered(), prev=getPrevWeek();
-    const cur=filtered.filter(d=>d.author===author&&d.type===type);
-    const prv=prev.filter(d=>d.author===author&&d.type===type);
-    const nl2br=s=>s.split('\n').map(l=>`<div style="margin-bottom:5px">${l}</div>`).join('');
+    const filtered = getFiltered();
+    const prev     = getPrevWeek();
+    const cur  = filtered.filter(d=>d.author===author && d.type===type);
+    const prv  = prev.filter(d=>d.author===author && d.type===type);
+
+    const nl2br = s => s.split('\n').map(l=>`<div style="margin-bottom:5px">${l}</div>`).join('');
     let visao=[],destaques=[],atencao=[],problemaP='',direcionamento=[],feedback='',cenario='';
+
     if(type==='recepcao'){
       const vendas=totalSales(cur),visitas=totalVisits(cur),contatos=totalContacts(cur),conv=convRate(cur);
       const pV=totalSales(prv),pVi=totalVisits(prv),pC=totalContacts(prv),pCv=convRate(prv),temP=prv.length>0;
       visao.push(`📋 ${cur.length} boletim${cur.length!==1?'s':''} registrado${cur.length!==1?'s':''}`);
       visao.push(`💰 ${vendas} venda${vendas!==1?'s':''} · ${visitas} visita${visitas!==1?'s':''} · ${contatos} contato${contatos!==1?'s':''}`);
       visao.push(conv>=40?`📈 Conversão ${conv}% — acima da média`:conv>0?`📉 Conversão ${conv}% — abaixo do esperado`:`⚠️ Nenhuma venda convertida`);
-      cenario=vendas===0?`👉 Período sem vendas — atenção imediata necessária`:conv>=50?`👉 Boa performance — manter ritmo e aumentar volume`:conv>=30?`👉 Conversão razoável — potencial para melhorar`:` 👉 Volume presente, mas conversão precisa evoluir`;
+      cenario=vendas===0?`👉 Período sem vendas — atenção imediata necessária`:conv>=50?`👉 Boa performance — manter ritmo e aumentar volume`:conv>=30?`👉 Conversão razoável — potencial para melhorar`:`👉 Volume presente, mas conversão precisa evoluir`;
       if(vendas>0)destaques.push(`✅ ${vendas} venda${vendas!==1?'s':''} realizadas`);
       if(contatos>=15)destaques.push(`✅ Alto volume de contatos: ${contatos}`);
       if(conv>=40)destaques.push(`✅ Conversão de ${conv}% — acima da média`);
@@ -549,7 +592,10 @@ function runAI(safeId,author,type){
       if(temP&&treinos<pT)direcionamento.push(`🎯 Recuperar volume: meta ${pT} treinos`);
       feedback=treinos===0?`${author}, precisamos conversar urgente. Nenhum treino prescrito não é aceitável. Vamos alinhar uma meta clara para os próximos turnos!`:media>=4?`${author}, boa produção! ${treinos} treinos mostram engajamento. Vamos manter e aumentar!`:`${author}, você tem potencial para mais. ${treinos} treinos está abaixo do esperado. Vamos definir metas por turno juntos!`;
     }
+
     const hora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    const fbTxtId = 'fb-txt-' + safeId;
+    const authorEsc = author.replace(/"/g,'&quot;');
     aiBox.innerHTML=`<div class="ai-box">
       <div class="ai-header">
         <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#7c5cbf,#4f8ef7);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-sparkles" style="font-size:14px;color:#fff"></i></div>
@@ -570,11 +616,11 @@ function runAI(safeId,author,type){
       <div class="ai-section"><div class="ai-lbl">🎯 Direcionamento imediato</div><div style="font-size:13px;color:#2d1f5e;line-height:1.9">${nl2br(direcionamento.join('\n'))}</div></div>
       <div style="background:#fff;border:0.5px solid #c7b8f5;border-radius:var(--br);padding:.75rem 1rem;margin-top:4px">
         <div class="ai-lbl" style="margin-bottom:6px">💬 Feedback pronto para enviar</div>
-        <div style="font-size:13px;color:#2d1f5e;line-height:1.7;font-style:italic" id="fb-txt-${safeId}">${feedback}</div>
-        <button onclick="usarFeedback('${author}','fb-txt-${safeId}',this)" style="margin-top:8px;font-size:12px;padding:4px 10px;background:#ede9fe;color:#5b3fd4;border-color:#c7b8f5"><i class="ti ti-copy"></i> Salvar como feedback</button>
+        <div style="font-size:13px;color:#2d1f5e;line-height:1.7;font-style:italic" id="${fbTxtId}">${feedback}</div>
+        <button class="btn-usar-feedback" data-author="${authorEsc}" data-txt-id="${fbTxtId}" style="margin-top:8px;font-size:12px;padding:4px 10px;background:#ede9fe;color:#5b3fd4;border-color:#c7b8f5"><i class="ti ti-copy"></i> Salvar como feedback</button>
       </div>
     </div>`;
-  },600);
+  }, 600);
 }
 
 async function deleteBoletim(id){
@@ -585,7 +631,6 @@ async function deleteBoletim(id){
   renderGestor();
 }
 
-function usarFeedback(author,txtId,btn){const txt=el(txtId)?.textContent||'';if(!txt)return;saveFeedback(author,txt);btn.innerHTML='<i class="ti ti-check"></i> Salvo!';btn.disabled=true;}
 function openFeedback(author){const e=allFeedbacks[author]||'';const t=prompt(`Feedback para ${author}:`,e);if(t===null)return;saveFeedback(author,t);}
 async function saveFeedback(author,feedback){await sb.from('feedbacks').upsert({author,feedback,updated_at:new Date().toISOString()},{onConflict:'author'});allFeedbacks[author]=feedback;renderGestor();}
 
@@ -630,7 +675,7 @@ async function addStaff(){
 }
 async function removeStaff(id){await sb.from('staff').delete().eq('id',id);allStaff=allStaff.filter(s=>s.id!==id);renderConfig();loadStaffList();}
 
-// ── IMPORTAR RELATÓRIO ANTIGO ─────────────────────────────────────────────
+// ── IMPORTAR ──────────────────────────────────────────────────────────────
 function renderImport(){
   el('gpg-import').innerHTML=`
     <div class="card">
@@ -666,97 +711,274 @@ Amanda - 2 treinos, 1 novo treino..."></textarea>
 }
 
 async function processImport(){
-  const text=el('imp-text')?.value.trim();
-  const date=el('imp-date')?.value||todayStr();
-  const unidade=el('imp-unidade')?.value||UNIDADE_ID;
-  if(!text){alert('Cole o relatório primeiro!');return;}
+  const text        = el('imp-text')?.value.trim();
+  const defaultDate = el('imp-date')?.value || todayStr();
+  const unidade     = el('imp-unidade')?.value || UNIDADE_ID;
+  if(!text){ alert('Cole o relatório primeiro!'); return; }
 
-  const btn=el('imp-btn');
-  btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> Processando...';
-  el('imp-result').innerHTML='';
+  const btn = el('imp-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader"></i> Processando...';
+  el('imp-result').innerHTML = '';
 
-  // Nomes dos funcionários cadastrados para ajudar a IA a identificar
-  const nomes=allStaff.map(s=>`${s.name} (${s.role==='recepcao'?'recepção':'musculação'})`).join(', ');
+  // Garante staff carregado
+  if(!allStaff.length){
+    const {data} = await sb.from('staff').select('*').order('name');
+    allStaff = data || [];
+  }
 
-  // Processar localmente — identificar blocos por nome
-  const linhas=text.split('\n').filter(l=>l.trim());
-  const boletinsParaSalvar=[];
-  const resultados=[];
+  // ── Normaliza string: minúsculo, sem acento, sem espaço extra ────────────
+  const norm = s => (s||'').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g,'').trim();
 
-  for(const linha of linhas){
-    // Tentar identificar o funcionário na linha
-    const staffMatch=allStaff.find(s=>{
-      const nome=s.name.toLowerCase();
-      const primeiroNome=nome.split(' ')[0];
-      return linha.toLowerCase().includes(primeiroNome)||linha.toLowerCase().includes(nome);
-    });
+  // ── Remove emojis e símbolos do início de uma string ─────────────────────
+  const semEmoji = s => s.replace(/^[\s\u00A0\u200B-\u200D\uFEFF\p{Emoji_Presentation}\p{Extended_Pictographic}]*/gu,'')
+                         .replace(/^[\s\S]*?([A-Za-zÀ-ÿ0-9])/, (_, c, i) => s.slice(s.indexOf(c)));
 
-    if(!staffMatch) continue;
+  // ── Pega primeiro número após ":" em uma linha ───────────────────────────
+  const numAposColon = linha => {
+    // Busca o primeiro número inteiro após qualquer ":"
+    const pos = linha.indexOf(':');
+    if(pos < 0) return 0;
+    const resto = linha.slice(pos+1);
+    const m = resto.match(/([+\-]?\d+)/);
+    return m ? (parseInt(m[1]) || 0) : 0;
+  };
 
-    const l=linha.toLowerCase();
-    // Extrair dados de recepção
-    if(staffMatch.role==='recepcao'){
-      const vendas=extrairNumero(l,['venda','vendas','fechou','fechamento'])||0;
-      const visitas=extrairNumero(l,['visita','visitas'])||0;
-      const contatos=extrairNumero(l,['contato','contatos','lista','listas'])||0;
-      const agendamentos=extrairNumero(l,['agendamento','agendamentos'])||0;
-      boletinsParaSalvar.push({
-        type:'recepcao',author:staffMatch.name,date,unidade,
-        data:{visits:String(visitas),appointments:String(agendamentos),contacts:String(contatos),
-          sales:vendas>0?Array(vendas).fill('Importado').join('\n'):'',noSaleReasons:[],noSaleOther:'',notes:'Importado de relatório antigo'}
+  // ── Pega texto após ":" ───────────────────────────────────────────────────
+  const txtAposColon = linha => {
+    const pos = linha.indexOf(':');
+    return pos >= 0 ? linha.slice(pos+1).trim() : '';
+  };
+
+  // ── Verifica se linha contém alguma das palavras-chave no rótulo (antes do :) ─
+  const rotuloContem = (linha, palavras) => {
+    const rotulo = norm(linha.split(':')[0]);
+    return palavras.some(p => rotulo.includes(norm(p)));
+  };
+
+  // ── Busca número na primeira linha cujo rótulo bate ──────────────────────
+  const pegaNum = (linhas, palavras) => {
+    for(const l of linhas)
+      if(rotuloContem(l, palavras)) return numAposColon(l);
+    return 0;
+  };
+
+  // ── Busca texto na primeira linha cujo rótulo bate ───────────────────────
+  const pegaTxt = (linhas, palavras) => {
+    for(const l of linhas)
+      if(rotuloContem(l, palavras)) return txtAposColon(l);
+    return '';
+  };
+
+  // ── Extrai data DD/MM ou DD/MM/YYYY de qualquer linha ────────────────────
+  const pegaData = linhas => {
+    for(const l of linhas){
+      // DD/MM/YYYY
+      const m1 = l.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if(m1) return `${m1[3]}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`;
+      // DD/MM (sem ano — usa ano do defaultDate)
+      const m2 = l.match(/(\d{1,2})\/(\d{1,2})/);
+      if(m2 && rotuloContem(l,['data','date'])){
+        const ano = defaultDate.split('-')[0] || new Date().getFullYear();
+        return `${ano}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;
+      }
+      // YYYY-MM-DD
+      const m3 = l.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if(m3) return m3[0];
+    }
+    return defaultDate;
+  };
+
+  // ── Identifica funcionário por nome (match flexível) ─────────────────────
+  const achaNoCadastro = nomeRaw => {
+    const n = norm(nomeRaw);
+    if(!n || n.length < 2) return null;
+    // 1. exato
+    let f = allStaff.find(s => norm(s.name) === n);
+    if(f) return f;
+    // 2. um contém o outro inteiro
+    f = allStaff.find(s => norm(s.name).includes(n) || n.includes(norm(s.name)));
+    if(f) return f;
+    // 3. primeiro nome bate
+    const prim = n.split(/\s+/)[0];
+    if(prim.length >= 3){
+      f = allStaff.find(s => norm(s.name).split(/\s+/)[0] === prim);
+      if(f) return f;
+    }
+    // 4. qualquer palavra >= 4 chars em comum
+    for(const p of n.split(/\s+/).filter(x => x.length >= 4)){
+      f = allStaff.find(s => norm(s.name).includes(p));
+      if(f) return f;
+    }
+    return null;
+  };
+
+  // ── Define se uma linha é início de bloco (linha de nome do consultor) ───
+  // Palavras que identificam o rótulo do nome
+  const ROTULOS_NOME = ['consultor','professor','funcionario','colaborador',
+                        'instrutor','estagiario','nome','personal','monitor'];
+
+  const ehCabecalho = linha => {
+    const rot = norm(linha.split(':')[0]);
+    return ROTULOS_NOME.some(p => rot.includes(p));
+  };
+
+  // ── Divide texto em blocos (um por funcionário) ───────────────────────────
+  const todasLinhas = text.split('\n');
+  const blocos = [];
+  let atual = [];
+  for(const l of todasLinhas){
+    if(ehCabecalho(l) && atual.length > 0){ blocos.push(atual); atual = []; }
+    atual.push(l);
+  }
+  if(atual.length) blocos.push(atual);
+
+  // ── Processa cada bloco ───────────────────────────────────────────────────
+  const paraSalvar  = [];
+  const naoBateram  = [];
+  const debugInfo   = [];
+
+  for(const linhas of blocos){
+    if(!linhas.join('').trim()) continue;
+
+    // Extrai nome: texto após ":" na linha de cabeçalho
+    const linhaNome = linhas.find(l => ehCabecalho(l)) || '';
+    const nomeRaw   = txtAposColon(linhaNome).trim();
+    const staff     = achaNoCadastro(nomeRaw);
+
+    debugInfo.push({ linhaNome: linhaNome.trim(), nomeRaw, staff });
+
+    if(!nomeRaw){ naoBateram.push('(sem nome)'); continue; }
+    if(!staff)  { naoBateram.push(nomeRaw);      continue; }
+
+    const data = pegaData(linhas);
+
+    if(staff.role === 'recepcao'){
+      const visitas  = pegaNum(linhas, ['visita','visitas']);
+      const agend    = pegaNum(linhas, ['agendamento','agendamentos']);
+      const ligacoes = pegaNum(linhas, ['ligacao','ligacoes','ligaçao','ligações','ligar']);
+      const social   = pegaNum(linhas, ['social selling','social seling','social']);
+      const story    = pegaNum(linhas, ['story','stories','instagram']);
+      const vendas   = pegaNum(linhas, ['venda','vendas']);
+      const listas   = pegaTxt(linhas, ['lista','listas']);
+      const cancelam = pegaNum(linhas, ['cancelamento','cancelamentos']);
+      const pagament = pegaNum(linhas, ['pagamento','maquininha']);
+      const contacts = ligacoes + social;
+      const sales    = vendas > 0 ? Array(vendas).fill('Importado').join('\n') : '';
+      const extras   = [
+        story    > 0 ? `Story: ${story}`          : '',
+        social   > 0 ? `Social Selling: ${social}` : '',
+        listas        ? `Listas: ${listas}`         : '',
+        cancelam > 0 ? `Cancelamentos: ${cancelam}` : '',
+        pagament > 0 ? `Maquininha: R$${pagament}`  : '',
+      ].filter(Boolean).join(' | ');
+
+      paraSalvar.push({
+        type:'recepcao', author:staff.name, date:data, unidade,
+        data:{ visits:String(visitas), appointments:String(agend),
+               contacts:String(contacts), sales,
+               noSaleReasons:[], noSaleOther:'', notes:extras }
       });
-      resultados.push({nome:staffMatch.name,tipo:'recepcao',dados:`${vendas} vendas · ${visitas} visitas · ${contatos} contatos`,ok:true});
+
     } else {
-      // musculação
-      const treinos=extrairNumero(l,['treino','treinos','prescrito','prescritos'])||0;
-      const novos=extrairNumero(l,['novo','novos','primeiro','primeiros'])||0;
-      const eng=extrairNumero(l,['engajamento','engaj','+'])||0;
-      const turno=l.includes('tarde')?'Tarde':l.includes('noite')?'Noite':'Manhã';
-      const equip=l.includes('esteira')||l.includes('equipamento')||l.includes('quebr')?linha.substring(linha.toLowerCase().indexOf(l.includes('esteira')?'esteira':l.includes('equipamento')?'equipamento':'quebr')):'';
-      boletinsParaSalvar.push({
-        type:'musculacao',author:staffMatch.name,date,unidade,
-        data:{shift:turno,trainings:String(treinos),newTrainings:String(novos),renewTrainings:'0',
-          engagement:String(eng),equipment:equip,organization:'Sim',countDone:'Sim',notes:'Importado de relatório antigo'}
+      const treinos  = pegaNum(linhas, ['treino','treinos','prescrito','prescritos','total']);
+      const novos    = pegaNum(linhas, ['novo treino','novos treinos','novo','novos']);
+      const renov    = pegaNum(linhas, ['renovacao','renovacoes','renovações','renov']);
+      const eng      = pegaNum(linhas, ['engajamento','engaj']);
+      const turnoTxt = pegaTxt(linhas, ['turno']);
+      const turno    = /tarde/i.test(turnoTxt)?'Tarde':/noite/i.test(turnoTxt)?'Noite':'Manhã';
+      const equip    = pegaTxt(linhas, ['equipamento','equipamentos','problema']);
+      const org      = pegaTxt(linhas, ['organizacao','organização','org']);
+      const obs      = pegaTxt(linhas, ['observacao','observações','obs','nota']);
+
+      paraSalvar.push({
+        type:'musculacao', author:staff.name, date:data, unidade,
+        data:{ shift:turno, trainings:String(treinos), newTrainings:String(novos),
+               renewTrainings:String(renov), engagement:String(eng),
+               equipment:equip||'', organization:org||'Sim',
+               countDone:'Sim', notes:obs||'' }
       });
-      resultados.push({nome:staffMatch.name,tipo:'musculacao',dados:`${treinos} treinos · engaj ${eng} · ${turno}`,ok:true});
     }
   }
 
-  // Salvar no Supabase
+  // ── Salva no Supabase ─────────────────────────────────────────────────────
   let salvos=0, erros=0;
-  for(const b of boletinsParaSalvar){
+  const resultados=[], erroDetalhe=[];
+  for(const b of paraSalvar){
     const{error}=await sb.from('boletins').insert(b);
-    if(error) erros++; else salvos++;
+    if(error){ erros++; erroDetalhe.push(`${b.author}: ${error.message}`); }
+    else{
+      salvos++;
+      if(b.type==='recepcao'){
+        const v = b.data.sales?.split('\n').filter(l=>l.trim()).length||0;
+        resultados.push({nome:b.author,
+          dados:`${v} vendas · ${b.data.visits||0} visitas · ${b.data.contacts||0} contatos · ${b.date}`});
+      } else {
+        resultados.push({nome:b.author,
+          dados:`${b.data.trainings||0} treinos · +${b.data.engagement||0} eng · ${b.data.shift} · ${b.date}`});
+      }
+    }
   }
 
-  btn.disabled=false; btn.innerHTML='<i class="ti ti-sparkles"></i> Processar e importar';
+  btn.disabled=false;
+  btn.innerHTML='<i class="ti ti-sparkles"></i> Processar e importar';
 
-  if(resultados.length===0){
-    el('imp-result').innerHTML=`<div class="alert" style="background:var(--bgw);color:var(--tw);border:0.5px solid var(--bw)"><i class="ti ti-alert-circle"></i> Nenhum funcionário identificado. Verifique se os nomes do relatório batem com os cadastrados.</div>`;
+  // ── Debug (sempre visível para diagnóstico) ───────────────────────────────
+  const debugHtml = `<details style="margin-top:10px">
+    <summary style="cursor:pointer;font-size:12px;color:var(--t2);padding:4px 0">
+      🔍 Debug — ${blocos.length} bloco(s) lido(s) · ${allStaff.length} funcionário(s) no cadastro
+    </summary>
+    <div style="background:var(--bg2);border-radius:var(--br);padding:10px;margin-top:6px;font-size:11px">
+      <div style="margin-bottom:8px;color:var(--t2)">
+        <strong>Cadastro:</strong> ${allStaff.map(s=>`${s.name} (${s.role})`).join(' · ')||'<em>vazio</em>'}
+      </div>
+      ${debugInfo.map(d=>`<div style="padding:4px 0;border-bottom:0.5px solid rgba(0,0,0,0.07)">
+        <span style="color:var(--t2)">Linha:</span> <code>${d.linhaNome}</code><br>
+        <span style="color:var(--t2)">Nome lido:</span> <strong>${d.nomeRaw||'—'}</strong>
+        → <span style="${d.staff?'color:var(--ts)':'color:var(--td)'}">${d.staff?'✅ '+d.staff.name+' ('+d.staff.role+')':'❌ não encontrado'}</span>
+      </div>`).join('')}
+      ${erroDetalhe.length?`<div style="color:var(--td);margin-top:6px"><strong>Erros Supabase:</strong> ${erroDetalhe.join('; ')}</div>`:''}
+    </div>
+  </details>`;
+
+  if(!paraSalvar.length){
+    el('imp-result').innerHTML=`<div style="background:var(--bgw);border:0.5px solid var(--bw);border-radius:var(--br);padding:.75rem 1rem;color:var(--tw);font-size:13px">
+      <i class="ti ti-alert-circle"></i> <strong>Nenhum funcionário identificado.</strong>
+      ${naoBateram.length?`<br><span style="font-size:12px">Nomes lidos no relatório: <strong>${naoBateram.join(', ')}</strong></span>`:''}
+      <br><span style="font-size:12px">Abra o Debug abaixo para ver o diagnóstico completo.</span>
+    </div>${debugHtml}`;
     return;
   }
 
-  const rows=resultados.map(r=>`<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border-radius:var(--br);padding:8px 12px;margin-bottom:6px">
-    <div style="display:flex;align-items:center;gap:8px">
-      <div class="avatar" style="width:32px;height:32px;font-size:11px">${initials(r.nome)}</div>
-      <div><p style="font-size:13px;font-weight:500;margin:0">${r.nome}</p><p style="font-size:12px;color:var(--t2);margin:0">${r.dados}</p></div>
-    </div>
-    <span style="font-size:12px;background:var(--bgs);color:var(--ts);padding:2px 8px;border-radius:var(--br)">✅ Salvo</span>
-  </div>`).join('');
+  const rows = resultados.map(r=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border-radius:var(--br);padding:8px 12px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="avatar" style="width:32px;height:32px;font-size:11px">${initials(r.nome)}</div>
+        <div><p style="font-size:13px;font-weight:500;margin:0">${r.nome}</p>
+             <p style="font-size:12px;color:var(--t2);margin:0">${r.dados}</p></div>
+      </div>
+      <span style="font-size:12px;background:var(--bgs);color:var(--ts);padding:2px 8px;border-radius:var(--br)">✅ Salvo</span>
+    </div>`).join('');
+
+  const naoRows = naoBateram.length
+    ?`<div style="background:var(--bgw);border:0.5px solid var(--bw);border-radius:var(--br);padding:.625rem 1rem;margin-top:8px;font-size:12px;color:var(--tw)">
+        <i class="ti ti-alert-triangle"></i> Não identificados: <strong>${naoBateram.join(', ')}</strong>
+      </div>`:''
 
   el('imp-result').innerHTML=`
     <div style="background:var(--bgs);border:0.5px solid var(--bs);border-radius:var(--br);padding:.75rem 1rem;margin-bottom:12px;color:var(--ts);font-size:13px">
       <i class="ti ti-circle-check"></i> ${salvos} boletim${salvos!==1?'s':''} importado${salvos!==1?'s':''} com sucesso${erros>0?` · ${erros} erro(s)`:''}.
-    </div>
-    ${rows}
-    <button onclick="loadGestor();setGTab('dash')" style="margin-top:8px;font-size:13px"><i class="ti ti-layout-dashboard"></i> Ver no dashboard</button>`;
+    </div>${rows}${naoRows}${debugHtml}
+    <button onclick="loadGestor();setGTab('dash')" style="margin-top:8px;font-size:13px">
+      <i class="ti ti-layout-dashboard"></i> Ver no dashboard
+    </button>`;
 }
 
 function extrairNumero(texto,palavras){
   for(const p of palavras){
     const idx=texto.indexOf(p);
     if(idx===-1) continue;
-    // procura número antes ou depois da palavra
     const antes=texto.substring(Math.max(0,idx-10),idx).match(/(\d+)/);
     const depois=texto.substring(idx,idx+15).match(/(\d+)/);
     if(antes) return parseInt(antes[1]);
